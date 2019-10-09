@@ -3,6 +3,7 @@ package com.brentvatne.exoplayer;
 import android.content.Context;
 import android.net.Uri;
 import android.text.TextUtils;
+import android.util.Log;
 
 import com.facebook.react.bridge.Dynamic;
 import com.facebook.react.bridge.ReadableArray;
@@ -60,11 +61,10 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
     private static final String PROP_HIDE_SHUTTER_VIEW = "hideShutterView";
     private static final String PROP_CONTROLS = "controls";
 
-    private ReactExoplayerConfig config;
-
-    public ReactExoplayerViewManager(ReactExoplayerConfig config) {
-        this.config = config;
-    }
+    private static final String PROP_DEVICE_ID = "deviceId";
+    private static final String PROP_CUSTOMER_ID = "customerId";
+    private static final String PROP_DRM_LICENSE_URL = "licenseUrl";
+    private static final String PROP_DRM_TYPE = "drmType";
 
     @Override
     public String getName() {
@@ -73,7 +73,7 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
 
     @Override
     protected ReactExoplayerView createViewInstance(ThemedReactContext themedReactContext) {
-        return new ReactExoplayerView(themedReactContext, config);
+        return new ReactExoplayerView(themedReactContext);
     }
 
     @Override
@@ -290,6 +290,39 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
                     ? bufferConfig.getInt(PROP_BUFFER_CONFIG_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS) : bufferForPlaybackAfterRebufferMs;
             videoView.setBufferConfig(minBufferMs, maxBufferMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs);
         }
+    }
+
+    @ReactProp(name = PROP_DEVICE_ID)
+    public void setDeviceId(final ReactExoplayerView videoView, final String deviceId) {
+        try {
+            videoView.setDeviceId(deviceId);
+        } catch (Exception ex) {
+            Log.e("CustomerId", ex.toString());
+        }
+    }
+
+    @ReactProp(name = PROP_CUSTOMER_ID)
+    public void setCustomerId(final ReactExoplayerView videoView, final String customerId) {
+        try {
+            videoView.setCustomerId(customerId);
+        } catch (Exception ex) {
+            Log.e("CustomerId", ex.toString());
+        }
+    }
+
+    @ReactProp(name = PROP_DRM_TYPE)
+    public void setDrmName(final ReactExoplayerView videoView, final String drmName) {
+        try {
+            videoView.setDrmName(drmName);
+        } catch (Exception ex) {
+            Log.e("DRM Info", ex.toString());
+        }
+    }
+
+    @ReactProp(name = PROP_DRM_LICENSE_URL)
+    public void setDrmUrl(final ReactExoplayerView videoView, @Nullable String licenseUrl) {
+        Log.d("setDrmUrl", licenseUrl);
+        videoView.setDrmLicenseUrl(licenseUrl);
     }
 
     private boolean startsWithValidScheme(String uriString) {
