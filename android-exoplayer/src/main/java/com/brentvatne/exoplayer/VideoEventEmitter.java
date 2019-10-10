@@ -120,8 +120,10 @@ class VideoEventEmitter {
     private static final String EVENT_PROP_PLAYBACK_RATE = "playbackRate";
 
     private static final String EVENT_PROP_ERROR = "error";
-    private static final String EVENT_PROP_ERROR_STRING = "errorString";
-    private static final String EVENT_PROP_ERROR_EXCEPTION = "errorException";
+    private static final String EVENT_PROP_ERROR_TITLE = "title";
+    private static final String EVENT_PROP_ERROR_MESSAGE = "message";
+    private static final String EVENT_PROP_ERROR_CODE = "code";
+    private static final String EVENT_PROP_ERROR_CODE_DEFAULT = "TDM_PLAYER_000";
 
     private static final String EVENT_PROP_TIMED_METADATA = "metadata";
 
@@ -223,10 +225,15 @@ class VideoEventEmitter {
         receiveEvent(EVENT_FULLSCREEN_DID_DISMISS, null);
     }
 
-    void error(String errorString, Exception exception) {
+    void error(String errorTitle, Exception exception) {
+        error(errorTitle, exception, EVENT_PROP_ERROR_CODE_DEFAULT);
+    }
+
+    void error(String errorTitle, Exception exception, String code) {
         WritableMap error = Arguments.createMap();
-        error.putString(EVENT_PROP_ERROR_STRING, errorString);
-        error.putString(EVENT_PROP_ERROR_EXCEPTION, exception.getMessage());
+        error.putString(EVENT_PROP_ERROR_TITLE, errorTitle);
+        error.putString(EVENT_PROP_ERROR_MESSAGE, exception.getMessage());
+        error.putString(EVENT_PROP_ERROR_CODE, code != null? code : EVENT_PROP_ERROR_CODE_DEFAULT);
         WritableMap event = Arguments.createMap();
         event.putMap(EVENT_PROP_ERROR, error);
         receiveEvent(EVENT_ERROR, event);
