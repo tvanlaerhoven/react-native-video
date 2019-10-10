@@ -14,6 +14,8 @@ import android.view.Window;
 import android.view.accessibility.CaptioningManager;
 import android.widget.FrameLayout;
 
+import com.brentvatne.exoplayer.bitrate.BitrateAdaptionPreset;
+import com.brentvatne.exoplayer.bitrate.DefaultBitrateAdaptionPreset;
 import com.brentvatne.exoplayer.titanium.TiMPMediaDrmCallback;
 import com.brentvatne.react.R;
 import com.brentvatne.receiver.AudioBecomingNoisyReceiver;
@@ -419,7 +421,14 @@ class ReactExoplayerView extends FrameLayout implements
             @Override
             public void run() {
                 if (player == null) {
-                    TrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory();
+
+                    BitrateAdaptionPreset preset = config.getBitrateAdaptionPreset();
+                    TrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory(
+                            preset.minDurationForQualityIncreaseMs(),
+                            preset.maxDurationForQualityDecreaseMs(),
+                            preset.minDurationToRetainAfterDiscardMs(),
+                            preset.bandwidthFraction()
+                    );
                     trackSelector = new DefaultTrackSelector(videoTrackSelectionFactory);
                     trackSelector.setParameters(trackSelector.buildUponParameters()
                             .setMaxVideoBitrate(maxBitRate == 0 ? Integer.MAX_VALUE : maxBitRate));
@@ -447,11 +456,11 @@ class ReactExoplayerView extends FrameLayout implements
                     }
 
                     DefaultRenderersFactory renderersFactory =
-                            new DefaultRenderersFactory(getContext(), drmSessionManager)
+                            new DefaultRenderersFactory(getContext())
                                     .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF);
 
                     player = ExoPlayerFactory.newSimpleInstance(getContext(), renderersFactory,
-                            trackSelector, defaultLoadControl, null, bandwidthMeter);
+                            trackSelector, defaultLoadControl, drmSessionManager, bandwidthMeter);
                     player.addListener(self);
                     player.addMetadataOutput(self);
                     exoPlayerView.setPlayer(player);

@@ -37,7 +37,7 @@ public class DefaultBitrateAdaptionPreset implements BitrateAdaptionPreset {
 
     @Override
     public int maxInitialBitrate() {
-        return 1600000;
+        return 1200000;
     }
 
     @Override
