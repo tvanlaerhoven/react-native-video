@@ -77,9 +77,12 @@ class ReactExoplayerView extends FrameLayout implements
         BandwidthMeter.EventListener,
         BecomingNoisyListener,
         AudioManager.OnAudioFocusChangeListener,
-        MetadataOutput {
+        MetadataOutput,
+        DefaultDrmSessionManager.EventListener {
 
     private static final String TAG = "ReactExoplayerView";
+
+    private static final String ERROR_CODE_DRM = "TDM_PLAYER_DRM011";
 
     private static final CookieManager DEFAULT_COOKIE_MANAGER;
     private static final int SHOW_PROGRESS = 1;
@@ -139,6 +142,12 @@ class ReactExoplayerView extends FrameLayout implements
     private Map<String, String> requestHeaders;
     private boolean mReportBandwidth = false;
     private boolean controls;
+
+    private UUID drmUUID = null;
+    private String drmLicenseUrl = null;
+    private String customerId = null;
+    private String deviceId = null;
+
     // \ End props
 
     // React
@@ -182,11 +191,71 @@ class ReactExoplayerView extends FrameLayout implements
         initializePlayer();
     }
 
-
     @Override
     public void setId(int id) {
         super.setId(id);
         eventEmitter.setViewId(id);
+    }
+
+    /**
+     * @param drmName
+     */
+    public void setDrmName(String drmName) throws ParserException {
+        switch (Util.toLowerInvariant(drmName)) {
+            case "widevine":
+                this.drmUUID = C.WIDEVINE_UUID;
+                break;
+            case "playready":
+                this.drmUUID = C.PLAYREADY_UUID;
+                break;
+            case "cenc":
+                this.drmUUID = C.CLEARKEY_UUID;
+                break;
+            default:
+                try {
+                    this.drmUUID = UUID.fromString(drmName);
+                } catch (RuntimeException e) {
+                    String errorString = "Unsupported drm type: " + drmName;
+                    eventEmitter.error(errorString, e);
+                    throw new ParserException(errorString);
+                }
+        }
+        Log.d("setDrmLicenseUrl", drmName);
+    }
+
+    public void setCustomerId(String customerId) {
+        this.customerId = customerId;
+    }
+
+    public void setDeviceId(String deviceId) {
+        this.deviceId = deviceId;
+    }
+
+    public void setDrmLicenseUrl(String licenseUrl) {
+        Log.d("setDrmLicenseUrl", licenseUrl);
+        this.drmLicenseUrl = licenseUrl;
+    }
+
+    @Override
+    public void onDrmKeysLoaded() {
+        Log.d("DRM Info", "onDrmKeysLoaded");
+    }
+
+    @Override
+    public void onDrmSessionManagerError(Exception e) {
+        Log.d("DRM Info", "onDrmSessionManagerError");
+        String errorString = String.format("Drm error, %s", e.getMessage());
+        eventEmitter.error(errorString, e, ERROR_CODE_DRM);
+    }
+
+    @Override
+    public void onDrmKeysRestored() {
+        Log.d("DRM Info", "onDrmKeysRestored");
+    }
+
+    @Override
+    public void onDrmKeysRemoved() {
+        Log.d("DRM Info", "onDrmKeysRestored");
     }
 
     private void createViews() {
@@ -352,10 +421,25 @@ class ReactExoplayerView extends FrameLayout implements
                     defaultLoadControlBuilder.setTargetBufferBytes(-1);
                     defaultLoadControlBuilder.setPrioritizeTimeOverSizeThresholds(true);
                     DefaultLoadControl defaultLoadControl = defaultLoadControlBuilder.createDefaultLoadControl();
+
+                    DrmSessionManager<FrameworkMediaCrypto> drmSessionManager = null;
+                    if (drmUUID != null) {
+                        try {
+                            drmSessionManager = buildDrmSessionManager();
+                        } catch (UnsupportedDrmException e) {
+                            int errorStringId = (e.reason == UnsupportedDrmException.REASON_UNSUPPORTED_SCHEME
+                                    ? R.string.error_drm_unsupported_scheme : R.string.error_drm_unknown);
+                            String errorMsg = getResources().getString(errorStringId);
+                            Log.d("Drm Info", getResources().getString(errorStringId));
+                            eventEmitter.error(errorMsg, e);
+                            return;
+                        }
+                    }
+
                     DefaultRenderersFactory renderersFactory =
-                            new DefaultRenderersFactory(getContext())
+                            new DefaultRenderersFactory(getContext(), drmSessionManager)
                                     .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF);
-                    // TODO: Add drmSessionManager to 5th param from: https://github.com/react-native-community/react-native-video/pull/1445
+
                     player = ExoPlayerFactory.newSimpleInstance(getContext(), renderersFactory,
                             trackSelector, defaultLoadControl, null, bandwidthMeter);
                     player.addListener(self);
@@ -402,9 +486,32 @@ class ReactExoplayerView extends FrameLayout implements
         }, 1);
     }
 
+    private DrmSessionManager<FrameworkMediaCrypto> buildDrmSessionManager() throws UnsupportedDrmException {
+        DefaultHttpDataSourceFactory httpDataSourceFactory = new DefaultHttpDataSourceFactory("sctv", null);
+        TiMPMediaDrmCallback drmCallback = new TiMPMediaDrmCallback(this.drmLicenseUrl, deviceId, customerId, httpDataSourceFactory);
+        FrameworkMediaDrm mediaDrm = FrameworkMediaDrm.newInstance(this.drmUUID);
+        return new DefaultDrmSessionManager<>(this.drmUUID, mediaDrm, drmCallback, null);
+    }
+
+    private int inferContentType(String path) {
+        if (path == null) {
+            return C.TYPE_OTHER;
+        }
+        String fileName = Util.toLowerInvariant(path);
+        if (fileName.contains(".mpd")) {
+            return C.TYPE_DASH;
+        } else if (fileName.contains(".m3u8")) {
+            return C.TYPE_HLS;
+        } else if (fileName.matches(".*\\.ism(l)?(/manifest(\\(.+\\))?)?")) {
+            return C.TYPE_SS;
+        } else {
+            return C.TYPE_OTHER;
+        }
+    }
+
     private MediaSource buildMediaSource(Uri uri, String overrideExtension) {
-        int type = Util.inferContentType(!TextUtils.isEmpty(overrideExtension) ? "." + overrideExtension
-                : uri.getLastPathSegment());
+        int type = inferContentType(!TextUtils.isEmpty(overrideExtension) ? "." + overrideExtension
+                : uri.getPath());
         switch (type) {
             case C.TYPE_SS:
                 return new SsMediaSource.Factory(
@@ -845,15 +952,18 @@ class ReactExoplayerView extends FrameLayout implements
             ex = e.getSourceException();
             errorString = getResources().getString(R.string.unrecognized_media_format);
         }
-        if (errorString != null) {
-            eventEmitter.error(errorString, ex);
-        }
+
         playerNeedsSource = true;
         if (isBehindLiveWindow(e)) {
             clearResumePosition();
             initializePlayer();
         } else {
             updateResumePosition();
+
+            // let error surface
+            if (errorString != null) {
+                eventEmitter.error(errorString, ex);
+            }
         }
     }
 
