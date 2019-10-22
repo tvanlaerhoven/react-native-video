@@ -464,6 +464,15 @@ Video.propTypes = {
   needsToRestoreUserInterfaceForPictureInPictureStop: PropTypes.func,
   onExternalPlaybackChange: PropTypes.func,
 
+  /* custom Tadaam props */
+  authToken: PropTypes.string,
+  drmType: PropTypes.string,
+  licenseUrl: PropTypes.string,
+  base64CertificateString: PropTypes.string,
+  customerId: PropTypes.string,
+  deviceId: PropTypes.string,
+  mediaMetadata: PropTypes.shape({}),
+
   /* Required by react-native */
   scaleX: PropTypes.number,
   scaleY: PropTypes.number,
