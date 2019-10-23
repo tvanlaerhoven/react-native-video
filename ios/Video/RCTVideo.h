@@ -14,11 +14,11 @@
 
 @class RCTEventDispatcher;
 #if __has_include(<react-native-video/RCTVideoCache.h>)
-@interface RCTVideo : UIView <RCTVideoPlayerViewControllerDelegate, DVAssetLoaderDelegatesDelegate>
+@interface RCTVideo : UIView <RCTVideoPlayerViewControllerDelegate, DVAssetLoaderDelegatesDelegate, AVAssetResourceLoaderDelegate>
 #elif TARGET_OS_TV
-@interface RCTVideo : UIView <RCTVideoPlayerViewControllerDelegate>
+@interface RCTVideo : UIView <RCTVideoPlayerViewControllerDelegate, AVAssetResourceLoaderDelegate>
 #else
-@interface RCTVideo : UIView <RCTVideoPlayerViewControllerDelegate, AVPictureInPictureControllerDelegate>
+@interface RCTVideo : UIView <RCTVideoPlayerViewControllerDelegate, AVPictureInPictureControllerDelegate, AVAssetResourceLoaderDelegate>
 #endif
 
 @property (nonatomic, copy) RCTDirectEventBlock onVideoLoadStart;
@@ -26,7 +26,7 @@
 @property (nonatomic, copy) RCTDirectEventBlock onVideoBuffer;
 @property (nonatomic, copy) RCTDirectEventBlock onVideoError;
 @property (nonatomic, copy) RCTDirectEventBlock onVideoProgress;
-@property (nonatomic, copy) RCTDirectEventBlock onBandwidthUpdate;
+@property (nonatomic, copy) RCTDirectEventBlock onBandwidthUpdate; // new
 @property (nonatomic, copy) RCTDirectEventBlock onVideoSeek;
 @property (nonatomic, copy) RCTDirectEventBlock onVideoEnd;
 @property (nonatomic, copy) RCTDirectEventBlock onTimedMetadata;
@@ -39,9 +39,9 @@
 @property (nonatomic, copy) RCTDirectEventBlock onPlaybackStalled;
 @property (nonatomic, copy) RCTDirectEventBlock onPlaybackResume;
 @property (nonatomic, copy) RCTDirectEventBlock onPlaybackRateChange;
-@property (nonatomic, copy) RCTDirectEventBlock onVideoExternalPlaybackChange;
-@property (nonatomic, copy) RCTDirectEventBlock onPictureInPictureStatusChanged;
-@property (nonatomic, copy) RCTDirectEventBlock onRestoreUserInterfaceForPictureInPictureStop;
+@property (nonatomic, copy) RCTDirectEventBlock onVideoExternalPlaybackChange; // new
+@property (nonatomic, copy) RCTDirectEventBlock onPictureInPictureStatusChanged; // new
+@property (nonatomic, copy) RCTDirectEventBlock onRestoreUserInterfaceForPictureInPictureStop; // new
 
 - (instancetype)initWithEventDispatcher:(RCTEventDispatcher *)eventDispatcher NS_DESIGNATED_INITIALIZER;
 

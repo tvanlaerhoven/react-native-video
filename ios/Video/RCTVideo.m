@@ -6,6 +6,11 @@
 #include <MediaAccessibility/MediaAccessibility.h>
 #include <AVFoundation/AVFoundation.h>
 
+// TDM: Added for DRM resolving
+#include <AVFoundation/AVAssetResourceLoader.h>
+// TDM: Added for keepAwake handling
+#import "UIKit/UIKit.h"
+
 static NSString *const statusKeyPath = @"status";
 static NSString *const playbackLikelyToKeepUpKeyPath = @"playbackLikelyToKeepUp";
 static NSString *const playbackBufferEmptyKeyPath = @"playbackBufferEmpty";
@@ -82,6 +87,15 @@ static int const RCTVideoUnset = -1;
   void (^__strong _Nonnull _restoreUserInterfaceForPIPStopCompletionHandler)(BOOL);
   AVPictureInPictureController *_pipController;
 #endif
+    
+  // TDM: add additional members
+  NSData* _licenseServerCertificateData;
+  NSString* _base64CertificateString;
+  NSString* _customerId;
+  NSString* _deviceId;
+  NSString* _licenseUrl;
+  NSString* _drmType;
+  NSString* _authToken;
 }
 
 - (instancetype)initWithEventDispatcher:(RCTEventDispatcher *)eventDispatcher
@@ -114,6 +128,15 @@ static int const RCTVideoUnset = -1;
 #if __has_include(<react-native-video/RCTVideoCache.h>)
     _videoCache = [RCTVideoCache sharedInstance];
 #endif
+      
+    // TDM: init our new members
+    _licenseServerCertificateData = nil;
+    _base64CertificateString = nil;
+    _customerId = nil;
+    _deviceId = nil;
+    _licenseUrl = nil;
+    _authToken = nil;
+      
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(applicationWillResignActive:)
                                                  name:UIApplicationWillResignActiveNotification
@@ -207,6 +230,9 @@ static int const RCTVideoUnset = -1;
   [self removePlayerItemObservers];
   [_player removeObserver:self forKeyPath:playbackRate context:nil];
   [_player removeObserver:self forKeyPath:externalPlaybackActive context: nil];
+    
+  // TDM: Stop KeepAwake
+  [[UIApplication sharedApplication] setIdleTimerDisabled:NO];
 }
 
 #pragma mark - App lifecycle handlers
@@ -267,7 +293,13 @@ static int const RCTVideoUnset = -1;
   const Float64 currentTimeSecs = CMTimeGetSeconds(currentTime);
   
   [[NSNotificationCenter defaultCenter] postNotificationName:@"RCTVideo_progress" object:nil userInfo:@{@"progress": [NSNumber numberWithDouble: currentTimeSecs / duration]}];
+    
+  // TDM: Retrieve current bitrate
+  NSArray *logEvents = video.accessLog.events;
+  AVPlayerItemAccessLogEvent *event = (AVPlayerItemAccessLogEvent *)[logEvents lastObject];
+  double indicatedBitrate=event.indicatedBitrate;
   
+  // TDM: added streamBitRate field to progress notification
   if( currentTimeSecs >= 0 && self.onVideoProgress) {
     self.onVideoProgress(@{
                            @"currentTime": [NSNumber numberWithFloat:CMTimeGetSeconds(currentTime)],
@@ -276,6 +308,7 @@ static int const RCTVideoUnset = -1;
                            @"atTimescale": [NSNumber numberWithInt:currentTime.timescale],
                            @"target": self.reactTag,
                            @"seekableDuration": [self calculateSeekableDuration],
+                           @"streamBitRate": [NSNumber numberWithFloat:indicatedBitrate],
                            });
   }
 }
@@ -513,6 +546,10 @@ static int const RCTVideoUnset = -1;
 #endif
 
     AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:assetOptions];
+    // RDM: add Fairplay DRM
+    dispatch_queue_t fairPlayQueue = dispatch_queue_create("FairplayQueue", NULL);
+    [asset.resourceLoader setDelegate:self queue:fairPlayQueue];
+      
     [self playerItemPrepareText:asset assetOptions:assetOptions withCallback:handler];
     return;
   } else if (isAsset) {
@@ -534,12 +571,20 @@ static int const RCTVideoUnset = -1;
             case RCTVideoCacheStatusMissingFileExtension: {
                 DebugLog(@"Could not generate cache key for uri '%@'. It is currently not supported to cache urls that do not include a file extension. The video file will not be cached. Checkout https://github.com/react-native-community/react-native-video/blob/master/docs/caching.md", uri);
                 AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:options];
+                // TDM: add Fairplay DRM
+                dispatch_queue_t fairPlayQueue = dispatch_queue_create("FairplayQueue", NULL);
+                [asset.resourceLoader setDelegate:self queue:fairPlayQueue];
+                
                 [self playerItemPrepareText:asset assetOptions:options withCallback:handler];
                 return;
             }
             case RCTVideoCacheStatusUnsupportedFileExtension: {
                 DebugLog(@"Could not generate cache key for uri '%@'. The file extension of that uri is currently not supported. The video file will not be cached. Checkout https://github.com/react-native-community/react-native-video/blob/master/docs/caching.md", uri);
                 AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:options];
+                // RDM: add Fairplay DRM
+                dispatch_queue_t fairPlayQueue = dispatch_queue_create("FairplayQueue", NULL);
+                [asset.resourceLoader setDelegate:self queue:fairPlayQueue];
+                
                 [self playerItemPrepareText:asset assetOptions:options withCallback:handler];
                 return;
             }
@@ -1365,6 +1410,47 @@ static int const RCTVideoUnset = -1;
   }
 }
 
+// TDM: setLicenseUrl for DRM
+- (void)setLicenseUrl:(NSString*)licenseUrl
+{
+    _licenseUrl = licenseUrl;
+}
+
+// TDM: setDeviceId for DRM
+- (void)setDeviceId:(NSString*)deviceId
+{
+    _deviceId = deviceId;
+}
+
+// TDM: setCustomerId for DRM
+- (void)setCustomerId:(NSString*)customerId
+{
+    _customerId = customerId;
+}
+
+// TDM: setDrmType for DRM
+- (void)setDrmType:(NSString*)drmType
+{
+    _drmType = drmType;
+}
+
+// TDM: setAuthToken for DRM
+-(void)setAuthToken:(NSString*)authToken
+{
+    _authToken = authToken;
+}
+
+// TDM: setBase64CertificateString for DRM
+- (void)setBase64CertificateString:(NSString*)base64CertificateString
+{
+    _base64CertificateString = base64CertificateString;
+    if (_base64CertificateString != nil) {
+        _licenseServerCertificateData = [[NSData alloc] initWithBase64EncodedString:_base64CertificateString options:0];
+    } else {
+        _licenseServerCertificateData = nil;
+    }
+}
+
 - (void)removePlayerLayer
 {
   [_playerLayer removeFromSuperlayer];
@@ -1632,5 +1718,68 @@ static int const RCTVideoUnset = -1;
   _restoreUserInterfaceForPIPStopCompletionHandler = completionHandler;
 }
 #endif
+
+#pragma mark - AVAssetResourceLoaderDelegate
+
+-(BOOL) resourceLoader:(AVAssetResourceLoader *)resourceLoader shouldWaitForLoadingOfRequestedResource:(AVAssetResourceLoadingRequest *)loadingRequest {
+    // GET contentIdentifierData
+    NSURLRequest* request = loadingRequest.request;
+    NSURL* requestURL = request.URL;
+    NSString* contentIdentifierString = requestURL.host;
+    NSData* contentIdentifierData = [contentIdentifierString dataUsingEncoding:NSUTF8StringEncoding];
+    
+    // CALCULATE SPC DATA
+    NSError *error = nil;
+    NSData *spcData = [loadingRequest streamingContentKeyRequestDataForApp:_licenseServerCertificateData contentIdentifier:contentIdentifierData options:nil error:&error];
+    UIDevice * currentDevice = [UIDevice currentDevice];
+    
+    // PRAPARE REQUEST PAYLOAD CONTAINING SPC DATA
+    NSMutableDictionary *httpPayloadDict = [NSMutableDictionary dictionary];
+    httpPayloadDict[@"Payload"] = [spcData base64EncodedStringWithOptions:0];
+    if (_authToken) {
+        httpPayloadDict[@"AuthToken"] = _authToken;
+    } else {
+        httpPayloadDict[@"LatensRegistration"] = [NSMutableDictionary dictionary];
+        httpPayloadDict[@"LatensRegistration"][@"CustomerName"] = _customerId;
+        httpPayloadDict[@"LatensRegistration"][@"AccountName"] = @"PlayReadyAccount";
+        httpPayloadDict[@"LatensRegistration"][@"PortalId"] = _deviceId;
+        httpPayloadDict[@"LatensRegistration"][@"FriendlyName"] = @"Swoop FairPlay Test";
+        httpPayloadDict[@"LatensRegistration"][@"DeviceInfo"] = [NSMutableDictionary dictionary];
+        httpPayloadDict[@"LatensRegistration"][@"DeviceInfo"][@"FormatVersion"] = @"1";
+        httpPayloadDict[@"LatensRegistration"][@"DeviceInfo"][@"DeviceType"] = @"Device";
+        httpPayloadDict[@"LatensRegistration"][@"DeviceInfo"][@"OSType"] = [currentDevice systemName];
+        httpPayloadDict[@"LatensRegistration"][@"DeviceInfo"][@"OSVersion"] = [currentDevice systemVersion];
+        httpPayloadDict[@"LatensRegistration"][@"DeviceInfo"][@"DRMProvider"] = @"Apple";
+        httpPayloadDict[@"LatensRegistration"][@"DeviceInfo"][@"DRMVersion"] = @"1";
+        httpPayloadDict[@"LatensRegistration"][@"DeviceInfo"][@"DRMType"] = _drmType;
+        httpPayloadDict[@"LatensRegistration"][@"DeviceInfo"][@"DeviceVendor"] = @"Apple";
+        httpPayloadDict[@"LatensRegistration"][@"DeviceInfo"][@"DeviceModel"] = [currentDevice model];
+    }
+    
+    NSData *httpPayloadJsonData = [NSJSONSerialization dataWithJSONObject:httpPayloadDict options:NSJSONWritingPrettyPrinted error:&error];
+    NSData* httpPayloadData = [[httpPayloadJsonData base64EncodedStringWithOptions:0] dataUsingEncoding:NSUTF8StringEncoding];
+    
+    // PREPARE LICENSE CALL
+    NSMutableURLRequest *key_request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:_licenseUrl]];
+    [key_request setHTTPMethod:@"POST"];
+    [key_request setHTTPBody:httpPayloadData];
+    
+    // GET LICENSE
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:NSURLSessionConfiguration.defaultSessionConfiguration delegate:nil delegateQueue:nil];
+    NSURLSessionTask *task = [session dataTaskWithRequest:key_request completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+        NSDictionary *dataDict = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        NSString *base64licenseString = nil;
+        base64licenseString = dataDict[@"license"];
+        //NSLog(@"TADAAM - base64licenseString: %@", base64licenseString);
+        NSData *encodedLicenseData = nil;
+        if (base64licenseString) {
+            encodedLicenseData = [[NSData alloc] initWithBase64EncodedString:base64licenseString options:0];
+        }
+        [loadingRequest.dataRequest respondWithData:encodedLicenseData];
+        [loadingRequest finishLoading];
+    }];
+    [task resume];
+    return true;
+}
 
 @end
