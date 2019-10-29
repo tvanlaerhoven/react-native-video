@@ -15,7 +15,6 @@ import android.view.accessibility.CaptioningManager;
 import android.widget.FrameLayout;
 
 import com.brentvatne.exoplayer.bitrate.BitrateAdaptionPreset;
-import com.brentvatne.exoplayer.bitrate.DefaultBitrateAdaptionPreset;
 import com.brentvatne.exoplayer.titanium.TiMPMediaDrmCallback;
 import com.brentvatne.react.R;
 import com.brentvatne.receiver.AudioBecomingNoisyReceiver;
@@ -459,6 +458,7 @@ class ReactExoplayerView extends FrameLayout implements
                     DefaultRenderersFactory renderersFactory =
                             new DefaultRenderersFactory(getContext())
                                     .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF);
+                    renderersFactory.setMediaCodecSelector(new BlackListMediaCodecSelector());
 
                     player = ExoPlayerFactory.newSimpleInstance(getContext(), renderersFactory,
                             trackSelector, defaultLoadControl, drmSessionManager, bandwidthMeter);
