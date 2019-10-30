@@ -498,9 +498,10 @@ class ReactExoplayerView extends FrameLayout implements
                     loadVideoStarted = true;
                 }
 
+                // NOTE: disabled playerControlView; it can steal focus from other views
                 // Initializing the playerControlView
-                initializePlayerControl();
-                setControls(controls);
+                // initializePlayerControl();
+                // setControls(controls);
                 applyModifiers();
             }
         }, 1);
