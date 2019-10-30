@@ -10,16 +10,28 @@ import java.util.List;
 import androidx.annotation.Nullable;
 
 public class BlackListMediaCodecSelector implements MediaCodecSelector {
+
+    // list of strings used in blacklisting codecs
+    final static String[] BLACKLISTEDCODECS = {};
+
+    //final static String[] BLACKLISTEDCODECS = {"OMX.amlogic.avc.decoder.awesome.secure"};
+
     @Override
     public List<MediaCodecInfo> getDecoderInfos(String mimeType, boolean requiresSecureDecoder, boolean requiresTunnelingDecoder) throws MediaCodecUtil.DecoderQueryException {
 
         List<MediaCodecInfo> codecInfos = MediaCodecUtil.getDecoderInfos(
                 mimeType, requiresSecureDecoder, requiresTunnelingDecoder);
-
-        // remove failing "OMX.amlogic.avc.decoder.awesome.secure"
+        // filter codecs based on blacklist template
         List<MediaCodecInfo> filteredCodecInfos = new ArrayList<>();
         for (MediaCodecInfo codecInfo: codecInfos) {
-            if (!"OMX.amlogic.avc.decoder.awesome.secure".equals(codecInfo.name)) {
+            boolean blacklisted = false;
+            for (String blackListedCodec: BLACKLISTEDCODECS) {
+                if (codecInfo.name.contains(blackListedCodec)) {
+                    blacklisted = true;
+                    break;
+                }
+            }
+            if (!blacklisted) {
                 filteredCodecInfos.add(codecInfo);
             }
         }
