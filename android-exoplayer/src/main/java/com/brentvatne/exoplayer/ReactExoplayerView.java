@@ -434,12 +434,13 @@ class ReactExoplayerView extends FrameLayout implements
                             .setMaxVideoBitrate(maxBitRate == 0 ? Integer.MAX_VALUE : maxBitRate));
 
                     DefaultAllocator allocator = new DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE);
-                    DefaultLoadControl.Builder defaultLoadControlBuilder = new DefaultLoadControl.Builder();
+                    CustomLoadControl.Builder defaultLoadControlBuilder = new CustomLoadControl.Builder();
                     defaultLoadControlBuilder.setAllocator(allocator);
                     defaultLoadControlBuilder.setBufferDurationsMs(minBufferMs, maxBufferMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs);
                     defaultLoadControlBuilder.setTargetBufferBytes(-1);
                     defaultLoadControlBuilder.setPrioritizeTimeOverSizeThresholds(true);
-                    DefaultLoadControl defaultLoadControl = defaultLoadControlBuilder.createDefaultLoadControl();
+                    CustomLoadControl defaultLoadControl = defaultLoadControlBuilder.createDefaultLoadControl();
+                    Log.d(TAG, "defaultLoadControl: " + minBufferMs + " " + maxBufferMs);
 
                     DrmSessionManager<FrameworkMediaCrypto> drmSessionManager = null;
                     if (drmUUID != null) {
@@ -914,6 +915,10 @@ class ReactExoplayerView extends FrameLayout implements
 
     @Override
     public void onTimelineChanged(Timeline timeline, Object manifest, int reason) {
+        Log.d("onTimelineChanged",
+        " bufferedPosition, " + player.getBufferedPosition() +
+        ", totalBufferedDuration, " +  player.getTotalBufferedDuration() +
+        ", currentPosition, " + player.getCurrentPosition());
         eventEmitter.bufferProgress(player.getBufferedPosition(), player.getTotalBufferedDuration());
     }
 
