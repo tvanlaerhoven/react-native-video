@@ -11,11 +11,11 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowManager;
 import android.view.accessibility.CaptioningManager;
 import android.widget.FrameLayout;
 
 import com.brentvatne.exoplayer.bitrate.BitrateAdaptionPreset;
-import com.brentvatne.exoplayer.bitrate.DefaultBitrateAdaptionPreset;
 import com.brentvatne.exoplayer.titanium.TiMPMediaDrmCallback;
 import com.brentvatne.react.R;
 import com.brentvatne.receiver.AudioBecomingNoisyReceiver;
@@ -291,6 +291,9 @@ class ReactExoplayerView extends FrameLayout implements
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         initializePlayer();
+
+        // Start KeepAwake
+        activateKeepAwake();
     }
 
     @Override
@@ -300,6 +303,36 @@ class ReactExoplayerView extends FrameLayout implements
          * Leave this here in case it causes issues.
          */
         // stopPlayback();
+
+        // Stop KeepAwake
+        deactivateKeepAwake();
+    }
+
+    // KeepAwake
+    public void activateKeepAwake() {
+        final Activity activity = this.themedReactContext.getCurrentActivity();
+
+        if (activity != null) {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                }
+            });
+        }
+    }
+
+    public void deactivateKeepAwake() {
+        final Activity activity = this.themedReactContext.getCurrentActivity();
+
+        if (activity != null) {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    activity.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                }
+            });
+        }
     }
 
     // LifecycleEventListener implementation
@@ -435,12 +468,13 @@ class ReactExoplayerView extends FrameLayout implements
                             .setMaxVideoBitrate(maxBitRate == 0 ? Integer.MAX_VALUE : maxBitRate));
 
                     DefaultAllocator allocator = new DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE);
-                    DefaultLoadControl.Builder defaultLoadControlBuilder = new DefaultLoadControl.Builder();
+                    CustomLoadControl.Builder defaultLoadControlBuilder = new CustomLoadControl.Builder();
                     defaultLoadControlBuilder.setAllocator(allocator);
                     defaultLoadControlBuilder.setBufferDurationsMs(minBufferMs, maxBufferMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs);
                     defaultLoadControlBuilder.setTargetBufferBytes(-1);
                     defaultLoadControlBuilder.setPrioritizeTimeOverSizeThresholds(true);
-                    DefaultLoadControl defaultLoadControl = defaultLoadControlBuilder.createDefaultLoadControl();
+                    CustomLoadControl defaultLoadControl = defaultLoadControlBuilder.createDefaultLoadControl();
+                    Log.d(TAG, "defaultLoadControl: " + minBufferMs + " " + maxBufferMs);
 
                     DrmSessionManager<FrameworkMediaCrypto> drmSessionManager = null;
                     if (drmUUID != null) {
@@ -459,6 +493,7 @@ class ReactExoplayerView extends FrameLayout implements
                     DefaultRenderersFactory renderersFactory =
                             new DefaultRenderersFactory(getContext())
                                     .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF);
+                    renderersFactory.setMediaCodecSelector(new BlackListMediaCodecSelector());
 
                     player = ExoPlayerFactory.newSimpleInstance(getContext(), renderersFactory,
                             trackSelector, defaultLoadControl, drmSessionManager, bandwidthMeter);
@@ -498,9 +533,10 @@ class ReactExoplayerView extends FrameLayout implements
                     loadVideoStarted = true;
                 }
 
+                // NOTE: disabled playerControlView; it can steal focus from other views
                 // Initializing the playerControlView
-                initializePlayerControl();
-                setControls(controls);
+                // initializePlayerControl();
+                // setControls(controls);
                 applyModifiers();
             }
         }, 1);
@@ -913,7 +949,11 @@ class ReactExoplayerView extends FrameLayout implements
 
     @Override
     public void onTimelineChanged(Timeline timeline, Object manifest, int reason) {
-        // Do nothing.
+        Log.d("onTimelineChanged",
+        " bufferedPosition, " + player.getBufferedPosition() +
+        ", totalBufferedDuration, " +  player.getTotalBufferedDuration() +
+        ", currentPosition, " + player.getCurrentPosition());
+        eventEmitter.bufferProgress(player.getBufferedPosition(), player.getTotalBufferedDuration());
     }
 
     @Override
