@@ -158,6 +158,9 @@ static int const RCTVideoUnset = -1;
                                                object:nil];
   }
   
+  // TDM: Start KeepAwake
+  [[UIApplication sharedApplication] setIdleTimerDisabled:YES];
+  
   return self;
 }
 
