@@ -1770,11 +1770,12 @@ static int const RCTVideoUnset = -1;
     // GET LICENSE
     NSURLSession *session = [NSURLSession sessionWithConfiguration:NSURLSessionConfiguration.defaultSessionConfiguration delegate:nil delegateQueue:nil];
     NSURLSessionTask *task = [session dataTaskWithRequest:key_request completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
-        NSDictionary *dataDict = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
         NSString *base64licenseString = nil;
-        base64licenseString = dataDict[@"license"];
-        //NSLog(@"TADAAM - base64licenseString: %@", base64licenseString);
-        NSData *encodedLicenseData = nil;
+		NSData *encodedLicenseData = nil;
+		if (data) {
+			NSDictionary *dataDict = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        	base64licenseString = dataDict[@"license"];
+		}
         if (base64licenseString) {
             encodedLicenseData = [[NSData alloc] initWithBase64EncodedString:base64licenseString options:0];
         }
